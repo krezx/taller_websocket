@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { Bell, BellOff } from 'lucide-react'; 
 import './App.css';
 
 const USERS = [
@@ -43,11 +44,18 @@ const LatestNotifications = ({ notifications }) => {
             } transition-all duration-300 ease-in-out`}
           >
             <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-medium">
-                  Para: {getUserName(notification.user_id)}
-                </h3>
-                <p className="mt-1">{notification.message}</p>
+              <div className="flex items-center">
+                {!notification.read_status ? (
+                  <Bell className="mr-2 text-blue-500" size={20} />
+                ) : (
+                  <BellOff className="mr-2 text-gray-400" size={20} />
+                )}
+                <div>
+                  <h3 className="font-medium">
+                    Para: {getUserName(notification.user_id)}
+                  </h3>
+                  <p className="mt-1">{notification.message}</p>
+                </div>
               </div>
               <span className="text-sm text-gray-500">
                 {new Date(notification.created_at).toLocaleString()}
@@ -151,25 +159,47 @@ function App() {
   // Generar notificaciones automáticas
   useEffect(() => {
     const interval = setInterval(() => {
-      // Seleccionar un usuario aleatorio
-      const connectedUsers = Object.keys(notifications);
-      if (connectedUsers.length > 0) {
-        const randomUser = connectedUsers[Math.floor(Math.random() * connectedUsers.length)];
-        
-        const notification = {
-          targetUserId: randomUser,
-          message: `${NOTIFICATION_TYPES[Math.floor(Math.random() * NOTIFICATION_TYPES.length)]} - ${new Date().toLocaleTimeString()}`,
-          type: 'automatic'
-        };
+      // Decidir si la notificación será para un usuario o global
+      const isGlobalNotification = Math.random() < 0.3; // 30% de probabilidad de ser global
 
-        // Enviar notificación incluso si el usuario está desconectado
-        fetch('http://localhost:5000/send-notification', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(notification),
-        });
+      if (isGlobalNotification) {
+        // Notificación global
+        const connectedUsers = Object.keys(notifications);
+        if (connectedUsers.length > 1) {
+          const notification = {
+            targetUserIds: connectedUsers,
+            message: `Notificación global para ${connectedUsers.length} usuarios - ${new Date().toLocaleTimeString()}`,
+            type: 'global'
+          };
+
+          fetch('http://localhost:5000/send-global-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(notification),
+          });
+        }
+      } else {
+        // Notificación para un usuario individual (código original)
+        const connectedUsers = Object.keys(notifications);
+        if (connectedUsers.length > 0) {
+          const randomUser = connectedUsers[Math.floor(Math.random() * connectedUsers.length)];
+          
+          const notification = {
+            targetUserId: randomUser,
+            message: `${NOTIFICATION_TYPES[Math.floor(Math.random() * NOTIFICATION_TYPES.length)]} - ${new Date().toLocaleTimeString()}`,
+            type: 'automatic'
+          };
+
+          fetch('http://localhost:5000/send-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(notification),
+          });
+        }
       }
     }, 7000);
 
@@ -272,17 +302,24 @@ function App() {
                     notifications[user.id]?.map((notification, index) => (
                       <div
                         key={notification.id || index}
-                        className={`p-3 mb-2 rounded cursor-pointer ${
+                        className={`p-3 mb-2 rounded cursor-pointer flex items-center ${
                           notification.read_status
                             ? 'bg-white'
                             : 'bg-blue-50 hover:bg-blue-100'
                         }`}
                         onClick={() => markAsRead(user.id, notification.id)}
                       >
-                        <p className="font-medium">{notification.message}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(notification.created_at).toLocaleString()}
-                        </p>
+                        {!notification.read_status ? (
+                          <Bell className="mr-2 text-blue-500" size={20} />
+                        ) : (
+                          <BellOff className="mr-2 text-gray-400" size={20} />
+                        )}
+                        <div>
+                          <p className="font-medium">{notification.message}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(notification.created_at).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
                     ))
                   )}

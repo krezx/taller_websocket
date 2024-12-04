@@ -84,6 +84,50 @@ app.post('/send-notification', (req, res) => {
   );
 });
 
+// endpoint para enviar notificaciones globales
+app.post('/send-global-notification', (req, res) => {
+  const { targetUserIds, message, type } = req.body;
+  
+  const notificationPromises = targetUserIds.map(targetUserId => {
+    return new Promise((resolve, reject) => {
+      db.query(
+        'INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)',
+        [targetUserId, message, type],
+        (err, result) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const notification = {
+            id: result.insertId,
+            user_id: targetUserId,
+            message,
+            type,
+            read_status: false,
+            created_at: new Date()
+          };
+
+          // Send to user if connected
+          const targetSocketId = userConnections.get(targetUserId);
+          if (targetSocketId) {
+            io.to(targetSocketId).emit('new_notification', notification);
+          }
+
+          resolve(notification);
+        }
+      );
+    });
+  });
+
+  Promise.all(notificationPromises)
+    .then(notifications => res.json(notifications))
+    .catch(error => {
+      console.error('Error sending global notifications:', error);
+      res.status(500).json({ error: 'Error sending global notifications' });
+    });
+});
+
 // Mapa para mantener registro de conexiones de usuarios
 const userConnections = new Map();
 
